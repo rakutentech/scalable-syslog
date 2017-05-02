@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/tls"
+	"expvar"
 	"log"
 	"net"
 	"time"
@@ -142,7 +143,7 @@ func (a *Adapter) Start() (actualHealth, actualService string) {
 	subscriber := ingress.NewSubscriber(clientManager, syslogConnector, a.emitter)
 	manager := binding.NewBindingManager(subscriber)
 
-	actualHealth = health.StartServer(a.health, a.healthAddr)
+	actualHealth = health.StartServer(expvar.Handler(), a.healthAddr)
 	creds := credentials.NewTLS(a.adapterServerTLSConfig)
 	actualService = a.startAdapterService(creds, manager)
 

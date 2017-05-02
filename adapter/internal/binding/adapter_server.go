@@ -1,10 +1,20 @@
 package binding
 
 import (
+	"expvar"
+
 	"golang.org/x/net/context"
 
 	v1 "code.cloudfoundry.org/scalable-syslog/internal/api/v1"
 )
+
+var (
+	drainCount *expvar.Int
+)
+
+func init() {
+	drainCount = expvar.NewInt("drainCount")
+}
 
 // BindingStore manages the bindings and respective subscriptions
 type BindingStore interface {
@@ -39,6 +49,7 @@ func (c *AdapterServer) ListBindings(ctx context.Context, req *v1.ListBindingsRe
 // CreateBinding adds a new binding to the binding manager.
 func (c *AdapterServer) CreateBinding(ctx context.Context, req *v1.CreateBindingRequest) (*v1.CreateBindingResponse, error) {
 	c.store.Add(req.Binding)
+	drainCount.Set(int64(len(c.store.List())))
 	c.health.SetCounter(map[string]int{"drainCount": len(c.store.List())})
 
 	return &v1.CreateBindingResponse{}, nil
@@ -47,6 +58,7 @@ func (c *AdapterServer) CreateBinding(ctx context.Context, req *v1.CreateBinding
 // DeleteBinding removes a binding from the binding manager.
 func (c *AdapterServer) DeleteBinding(ctx context.Context, req *v1.DeleteBindingRequest) (*v1.DeleteBindingResponse, error) {
 	c.store.Delete(req.Binding)
+	drainCount.Set(int64(len(c.store.List())))
 	c.health.SetCounter(map[string]int{"drainCount": len(c.store.List())})
 
 	return &v1.DeleteBindingResponse{}, nil

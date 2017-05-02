@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func StartServer(h *Health, addr string) string {
+func StartServer(h http.Handler, addr string) string {
 	router := http.NewServeMux()
 	router.Handle("/health", h)
 

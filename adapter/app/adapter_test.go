@@ -101,7 +101,7 @@ var _ = Describe("Adapter", func() {
 
 			body, err := ioutil.ReadAll(healthResp.Body)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(body).To(MatchJSON(`{"drainCount": 1}`))
+			Expect(body).To(ContainSubstring(`"drainCount": 1`))
 		})
 
 		It("deletes a binding", func() {
@@ -121,7 +121,7 @@ var _ = Describe("Adapter", func() {
 
 			body, err := ioutil.ReadAll(healthResp.Body)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(body).To(MatchJSON(`{"drainCount": 0}`))
+			Expect(body).To(ContainSubstring(`"drainCount": 0`))
 		})
 	})
 
