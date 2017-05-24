@@ -5,11 +5,13 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func StartServer(h *Health, addr string) string {
+func StartServer(addr string) string {
 	router := http.NewServeMux()
-	router.Handle("/health", h)
+	router.Handle("/metrics", promhttp.Handler())
 
 	server := http.Server{
 		Addr:         addr,
@@ -24,8 +26,8 @@ func StartServer(h *Health, addr string) string {
 	}
 
 	go func() {
-		log.Printf("Health endpoint is listening on %s", lis.Addr().String())
-		log.Fatalf("Health server closing: %s", server.Serve(lis))
+		log.Printf("Metrics endpoint is listening on %s", lis.Addr().String())
+		log.Fatalf("Metrics server closing: %s", server.Serve(lis))
 	}()
 	return lis.Addr().String()
 }

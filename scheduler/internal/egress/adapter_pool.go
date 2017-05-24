@@ -3,6 +3,8 @@ package egress
 import (
 	"log"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	v1 "code.cloudfoundry.org/scalable-syslog/internal/api/v1"
 
 	"google.golang.org/grpc"
@@ -10,7 +12,24 @@ import (
 
 type AdapterPool []v1.AdapterClient
 
-func NewAdapterPool(addrs []string, h HealthEmitter, opts ...grpc.DialOption) AdapterPool {
+var (
+	// metric-documentation-v2: DrainCount will keep track of the number of
+	// syslog drains that have been registered with an adapter.
+	adapterCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "scalablesyslog", // deployment name
+			Subsystem: "scheduler",      // job name
+			Name:      "adapter_count",
+			Help:      "Number of adpaters registered",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(adapterCount)
+}
+
+func NewAdapterPool(addrs []string, opts ...grpc.DialOption) AdapterPool {
 	var pool AdapterPool
 
 	for _, addr := range addrs {
@@ -25,9 +44,7 @@ func NewAdapterPool(addrs []string, h HealthEmitter, opts ...grpc.DialOption) Ad
 		pool = append(pool, c)
 	}
 
-	if h != nil {
-		h.SetCounter(map[string]int{"adapterCount": len(pool)})
-	}
+	adapterCount.Set(float64(len(pool)))
 
 	return pool
 }

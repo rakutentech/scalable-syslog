@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+type DeploymentConfig struct {
+	JobName        string
+	DeploymentName string
+	Index          string
+	IP             string
+}
+
 type Config struct {
 	HealthHostport       string
 	AdapterHostport      string
@@ -27,6 +34,8 @@ type Config struct {
 	MetricIngressAddr     string
 	MetricIngressCN       string
 	MetricEmitterInterval time.Duration
+
+	DeploymentVars DeploymentConfig
 }
 
 func LoadConfig() *Config {
@@ -54,6 +63,11 @@ func LoadConfig() *Config {
 	flag.StringVar(&cfg.MetricIngressAddr, "metric-ingress-addr", "", "The ingress address for the metrics API")
 	flag.StringVar(&cfg.MetricIngressCN, "metric-ingress-cn", "", "The TLS common name for metrics ingress API")
 	flag.DurationVar(&cfg.MetricEmitterInterval, "metric-emitter-interval", time.Minute, "The interval to send batched metrics to metron")
+
+	// flag.StringVar(&cfg.DeploymentVars.JobName, "job-name", "", "The name of the job")
+	// flag.StringVar(&cfg.DeploymentVars.DeploymentName, "deployment-name", "", "The name of the deployment")
+	// flag.StringVar(&cfg.DeploymentVars.Index, "index", "", "The index of the instance")
+	// flag.StringVar(&cfg.DeploymentVars.IP, "ip", "", "The IP of the instance")
 
 	flag.Parse()
 

@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"code.cloudfoundry.org/scalable-syslog/internal/metricemitter"
 	"code.cloudfoundry.org/scalable-syslog/scheduler/internal/ingress"
 )
@@ -13,21 +15,45 @@ type BindingReader interface {
 	FetchBindings() (appBindings ingress.Bindings, invalid int, err error)
 }
 
-type HealthEmitter interface {
-	SetCounter(c map[string]int)
-}
-
 type AdapterService interface {
 	CreateDelta(actual ingress.Bindings, expected ingress.Bindings)
 	DeleteDelta(actual ingress.Bindings, expected ingress.Bindings)
 	List() ingress.Bindings
 }
 
+var (
+	// metric-documentation-v2: DrainCount will keep track of the number of
+	// syslog drains that have been registered with an adapter.
+	drainCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "scalablesyslog", // deployment name
+			Subsystem: "scheduler",      // job name
+			Name:      "drain_count",
+			Help:      "Number of drains registered",
+		},
+	)
+
+	// metric-documentation-v2: blacklistedOrInvalidUrlCount will keep track
+	// of the number of syslog drains that are blacklisted or invalid
+	blacklistUrlCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: "scalablesyslog", // deployment name
+			Subsystem: "scheduler",      // job name
+			Name:      "blacklistedOrInvalidUrlCount",
+			Help:      "Number of blacklisted or invalid urls",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(drainCount)
+	prometheus.MustRegister(blacklistUrlCount)
+}
+
 // Orchestrator manages writes to a number of adapters.
 type Orchestrator struct {
 	reader     BindingReader
 	service    AdapterService
-	health     HealthEmitter
 	drainGauge *metricemitter.GaugeMetric
 }
 
@@ -39,13 +65,11 @@ type MetricEmitter interface {
 func NewOrchestrator(
 	r BindingReader,
 	s AdapterService,
-	h HealthEmitter,
 	m MetricEmitter,
 ) *Orchestrator {
 	return &Orchestrator{
 		reader:  r,
 		service: s,
-		health:  h,
 		drainGauge: m.NewGaugeMetric(
 			"drains",
 			"count",
@@ -62,11 +86,8 @@ func (o *Orchestrator) Run(interval time.Duration) {
 			log.Printf("fetch bindings failed with error: %s", err)
 			continue
 		}
-
-		o.health.SetCounter(map[string]int{
-			"drainCount":                   len(expected),
-			"blacklistedOrInvalidUrlCount": blacklisted,
-		})
+		drainCount.Set(float64(len(expected)))
+		blacklistUrlCount.Set(float64(blacklisted))
 
 		o.drainGauge.Set(int64(len(expected)))
 

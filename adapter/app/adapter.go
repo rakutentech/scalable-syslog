@@ -108,7 +108,6 @@ func NewAdapter(
 		syslogDialTimeout:      5 * time.Second,
 		syslogIOTimeout:        60 * time.Second,
 		skipCertVerify:         true,
-		health:                 health.NewHealth(),
 		metricClient:           metricClient,
 	}
 
@@ -143,7 +142,7 @@ func (a *Adapter) Start() (actualHealth, actualService string) {
 	subscriber := ingress.NewSubscriber(clientManager, syslogConnector, a.metricClient)
 	manager := binding.NewBindingManager(subscriber)
 
-	actualHealth = health.StartServer(a.health, a.healthAddr)
+	actualHealth = health.StartServer(a.healthAddr)
 	creds := credentials.NewTLS(a.adapterServerTLSConfig)
 	actualService = a.startAdapterService(creds, manager)
 
@@ -156,7 +155,7 @@ func (a *Adapter) startAdapterService(creds credentials.TransportCredentials, ma
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	adapterServer := binding.NewAdapterServer(manager, a.health)
+	adapterServer := binding.NewAdapterServer(manager)
 	grpcServer := grpc.NewServer(
 		grpc.Creds(creds),
 	)

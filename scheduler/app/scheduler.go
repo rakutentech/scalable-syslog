@@ -131,12 +131,12 @@ func (s *Scheduler) setupIngress() {
 func (s *Scheduler) startEgress() {
 	creds := credentials.NewTLS(s.adapterTLSConfig)
 
-	pool := egress.NewAdapterPool(s.adapterAddrs, s.health, grpc.WithTransportCredentials(creds))
+	pool := egress.NewAdapterPool(s.adapterAddrs, grpc.WithTransportCredentials(creds))
 	s.adapterService = egress.NewAdapterService(pool)
-	orchestrator := egress.NewOrchestrator(s.fetcher, s.adapterService, s.health, s.emitter)
+	orchestrator := egress.NewOrchestrator(s.fetcher, s.adapterService, s.emitter)
 	go orchestrator.Run(s.interval)
 }
 
 func (s *Scheduler) serveHealth() string {
-	return health.StartServer(s.health, s.healthAddr)
+	return health.StartServer(s.healthAddr)
 }
