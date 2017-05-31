@@ -138,5 +138,5 @@ func (s *Scheduler) startEgress() {
 }
 
 func (s *Scheduler) serveHealth() string {
-	return health.StartServer(s.healthAddr)
+	return health.StartServer(s.healthAddr, s.adapterTLSConfig)
 }

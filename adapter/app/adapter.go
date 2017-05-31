@@ -142,7 +142,7 @@ func (a *Adapter) Start() (actualHealth, actualService string) {
 	subscriber := ingress.NewSubscriber(clientManager, syslogConnector, a.metricClient)
 	manager := binding.NewBindingManager(subscriber)
 
-	actualHealth = health.StartServer(a.healthAddr)
+	actualHealth = health.StartServer(a.healthAddr, a.adapterServerTLSConfig)
 	creds := credentials.NewTLS(a.adapterServerTLSConfig)
 	actualService = a.startAdapterService(creds, manager)
 
