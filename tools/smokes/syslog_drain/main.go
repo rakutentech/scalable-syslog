@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -24,6 +25,11 @@ var (
 )
 
 func main() {
+	verbose := os.Getenv("VERBOSE")
+	if verbose != "true" {
+		log.SetOutput(ioutil.Discard)
+	}
+
 	l, err := net.Listen("tcp", fmt.Sprintf(":%s", os.Getenv("PORT")))
 	if err != nil {
 		log.Fatal(err)
@@ -82,6 +88,7 @@ func handleRequest(conn net.Conn) {
 			break
 		}
 
+		log.Printf("msg.Message: %s", string(msg.Message))
 		if !bytes.Contains(msg.Message, []byte("HTTP")) {
 			if bytes.Contains(msg.Message, []byte("prime")) {
 				atomic.AddUint64(&primeCount, 1)

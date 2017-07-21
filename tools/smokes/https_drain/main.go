@@ -13,6 +13,11 @@ import (
 )
 
 func main() {
+	verbose := os.Getenv("VERBOSE")
+	if verbose != "true" {
+		log.SetOutput(ioutil.Discard)
+	}
+
 	handler := NewSyslog()
 	go handler.reportCount()
 
@@ -66,6 +71,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	log.Printf("BODY: %s", string(body))
 
 	if !bytes.Contains(body, []byte("HTTP")) {
 		if bytes.Contains(body, []byte("prime")) {
