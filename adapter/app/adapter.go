@@ -181,15 +181,11 @@ func NewAdapter(
 			maxRetries,
 			logClient,
 		),
-		"kafka": egress.RetryWrapper(
-			egress.NewKafkaWriter,
-			egress.ExponentialDuration,
+		"kafka": egress.KafkaRetryWriterConstructor(
 			maxRetries,
 			logClient,
 		),
-		"kafka-tls": egress.RetryWrapper(
-			egress.NewKafkaWriter,
-			egress.ExponentialDuration,
+		"kafka-tls": egress.KafkaRetryWriterConstructor(
 			maxRetries,
 			logClient,
 		),
