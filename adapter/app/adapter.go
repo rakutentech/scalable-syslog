@@ -181,6 +181,18 @@ func NewAdapter(
 			maxRetries,
 			logClient,
 		),
+		"kafka": egress.RetryWrapper(
+			egress.NewKafkaWriter,
+			egress.ExponentialDuration,
+			maxRetries,
+			logClient,
+		),
+		"kafka-tls": egress.RetryWrapper(
+			egress.NewKafkaWriter,
+			egress.ExponentialDuration,
+			maxRetries,
+			logClient,
+		),
 	}
 
 	droppedMetrics := map[string]pulseemitter.CounterMetric{
@@ -193,6 +205,12 @@ func NewAdapter(
 		// metric-documentation-v2: (adapter.dropped) Number of envelopes dropped
 		// when sending to a syslog drain over syslog-tls.
 		"syslog-tls": buildMetric(metricClient, "syslog-tls", "dropped"),
+		// metric-documentation-v2: (adapter.dropped) Number of envelopes dropped
+		// when sending to a syslog drain over kafka.
+		"kafka": buildMetric(metricClient, "kafka", "dropped"),
+		// metric-documentation-v2: (adapter.dropped) Number of envelopes dropped
+		// when sending to a syslog drain over kafka-tls.
+		"kafka-tls": buildMetric(metricClient, "kafka-tls", "dropped"),
 	}
 
 	egressMetrics := map[string]pulseemitter.CounterMetric{
@@ -205,6 +223,12 @@ func NewAdapter(
 		// metric-documentation-v2: (adapter.egress) Number of envelopes sent out
 		// to a syslog drain over syslog-tls.
 		"syslog-tls": buildMetric(metricClient, "syslog-tls", "egress"),
+		// metric-documentation-v2: (adapter.egress) Number of envelopes sent out
+		// to a syslog drain over kafka.
+		"kafka": buildMetric(metricClient, "kafka", "egress"),
+		// metric-documentation-v2: (adapter.egress) Number of envelopes sent out
+		// to a syslog drain over kafka-tls.
+		"kafka-tls": buildMetric(metricClient, "kafka-tls", "egress"),
 	}
 
 	syslogConnector := egress.NewSyslogConnector(
