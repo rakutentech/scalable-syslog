@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	loggregator "code.cloudfoundry.org/go-loggregator"
@@ -17,8 +19,8 @@ import (
 // where opts are key=value pairs:
 // key: "compression.type", values: "none", "lz4", "snappy", "gzip"
 // key: "client.id", values: any valid client ID
-// key: "broker[]", values: valid hostname:port of additional broker
-//                          (can be repeated for additional brokers)
+// key: "bootstrap.servers", values: comma-separated valid hostname:port of additional brokers
+// key: "message.max.bytes", values: 128K < message.max.bytes < min(16M, broker message.max.bytes)
 
 type KafkaWriter struct {
 	hostname      string
@@ -27,7 +29,7 @@ type KafkaWriter struct {
 	url           *url.URL
 	client        sarama.AsyncProducer
 	egressMetric  pulseemitter.CounterMetric
-	droppedMetric pulseemitter.CounterMetric // FIXME
+	droppedMetric pulseemitter.CounterMetric // FIXME: exposing this requires bypassing DiodeWriter
 	retries       int
 	logClient     LogClient
 	doneCh        chan struct{}
@@ -88,9 +90,14 @@ func newKafkaWriter(
 		config.Net.SASL.Password, _ = binding.URL.User.Password()
 	}
 
-	config.Producer.Flush.Bytes = 500000
-	config.Producer.Flush.Messages = 1000
+	mmb, err := strconv.Atoi(binding.URL.Query().Get("max.message.bytes"))
+	if err != nil && mmb >= 1<<17 && mmb < 1<<24 {
+		config.Producer.MaxMessageBytes = mmb
+	}
+
+	config.Producer.Flush.Bytes = config.Producer.MaxMessageBytes / 2
 	config.Producer.Flush.Frequency = 1 * time.Second
+
 	switch binding.URL.Query().Get("compression.type") {
 	case "none":
 		config.Producer.Compression = sarama.CompressionNone
@@ -110,10 +117,22 @@ func newKafkaWriter(
 	config.Producer.Return.Errors = true
 	config.Producer.Return.Successes = true
 
-	brokers := append([]string{binding.URL.Host}, binding.URL.Query()["broker[]"]...)
+	brokers := append(
+		[]string{binding.URL.Host},
+		strings.Split(binding.URL.Query().Get("bootstrap.servers"), ",")...,
+	)
+
+	logClient.EmitLog(
+		fmt.Sprintf("Kafka Drain: Creating producer to %v with config %v", brokers, config),
+		loggregator.WithAppInfo(binding.AppID, "LGR", ""),
+	)
 
 	client, err := sarama.NewAsyncProducer(brokers, config)
 	if err != nil {
+		logClient.EmitLog(
+			fmt.Sprintf("Kafka Drain: Failed creating producer: %s", err),
+			loggregator.WithAppInfo(binding.AppID, "LGR", ""),
+		)
 		return nil
 	}
 
@@ -156,10 +175,20 @@ func (w *KafkaWriter) Write(env *loggregator_v2.Envelope) error {
 }
 
 func (w *KafkaWriter) resultConsumer() {
+	errDone, okDone := false, false
+
+	defer func() {
+		close(w.doneCh)
+	}()
+
 	for {
 		select {
 		case e, ok := <-w.client.Errors():
 			if !ok {
+				if okDone {
+					return
+				}
+				errDone = true
 				continue
 			}
 			md := e.Msg.Metadata.(msgMetadata)
@@ -177,11 +206,13 @@ func (w *KafkaWriter) resultConsumer() {
 			w.droppedMetric.Increment(1)
 		case _, ok := <-w.client.Successes():
 			if !ok {
+				if errDone {
+					return
+				}
+				okDone = true
 				continue
 			}
 			w.egressMetric.Increment(1)
-		case <-w.doneCh:
-			return
 		}
 	}
 }
@@ -189,16 +220,12 @@ func (w *KafkaWriter) resultConsumer() {
 func (w *KafkaWriter) emitLGRLog(e *loggregator_v2.Envelope, err string) {
 	w.logClient.EmitLog(
 		fmt.Sprintf("Kafka Drain: Error when writing to %s, error: %s", w.url.Host, err),
-		loggregator.WithAppInfo(
-			w.appID,
-			"LGR",
-			e.GetTags()["source_instance"],
-		),
+		loggregator.WithAppInfo(w.appID, "LGR", e.GetTags()["source_instance"]),
 	)
 }
 
 func (w *KafkaWriter) Close() error {
-	w.Close()
-	close(w.doneCh)
+	w.client.AsyncClose()
+	<-w.doneCh
 	return nil
 }
