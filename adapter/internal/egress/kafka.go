@@ -72,55 +72,7 @@ func newKafkaWriter(
 	maxRetries int,
 	logClient LogClient,
 ) *KafkaWriter {
-
-	config := sarama.NewConfig()
-	config.Net.DialTimeout = dialTimeout
-	config.Net.ReadTimeout = ioTimeout
-	config.Net.WriteTimeout = ioTimeout
-	config.Net.KeepAlive = 30 * time.Second
-
-	if binding.URL.Scheme == "kafka-tls" {
-		config.Net.TLS.Config = &tls.Config{InsecureSkipVerify: skipCertVerify}
-		config.Net.TLS.Enable = true
-	}
-
-	if binding.URL.User != nil {
-		config.Net.SASL.Enable = true
-		config.Net.SASL.User = binding.URL.User.Username()
-		config.Net.SASL.Password, _ = binding.URL.User.Password()
-	}
-
-	mmb, err := strconv.Atoi(binding.URL.Query().Get("max.message.bytes"))
-	if err != nil && mmb >= 1<<17 && mmb < 1<<24 {
-		config.Producer.MaxMessageBytes = mmb
-	}
-
-	config.Producer.Flush.Bytes = config.Producer.MaxMessageBytes / 2
-	config.Producer.Flush.Frequency = 1 * time.Second
-
-	switch binding.URL.Query().Get("compression.type") {
-	case "none":
-		config.Producer.Compression = sarama.CompressionNone
-	default:
-		config.Producer.Compression = sarama.CompressionSnappy
-	case "lz4":
-		config.Producer.Compression = sarama.CompressionLZ4
-	case "gzip":
-		config.Producer.Compression = sarama.CompressionGZIP
-	}
-
-	config.ClientID = "Cloud Foundry"
-	if clientID := binding.URL.Query().Get("client.id"); clientID != "" {
-		config.ClientID = clientID
-	}
-
-	config.Producer.Return.Errors = true
-	config.Producer.Return.Successes = true
-
-	brokers := append(
-		[]string{binding.URL.Host},
-		strings.Split(binding.URL.Query().Get("bootstrap.servers"), ",")...,
-	)
+	brokers, config := parseConnString(binding, dialTimeout, ioTimeout, skipCertVerify)
 
 	logClient.EmitLog(
 		fmt.Sprintf("Kafka Drain: Creating producer to %v with config %v", brokers, config),
@@ -228,4 +180,57 @@ func (w *KafkaWriter) Close() error {
 	w.client.AsyncClose()
 	<-w.doneCh
 	return nil
+}
+
+func parseConnString(binding *URLBinding, dialTimeout, ioTimeout time.Duration, skipCertVerify bool) (brokers []string, config *sarama.Config) {
+	config = sarama.NewConfig()
+	config.Net.DialTimeout = dialTimeout
+	config.Net.ReadTimeout = ioTimeout
+	config.Net.WriteTimeout = ioTimeout
+	config.Net.KeepAlive = 30 * time.Second
+
+	if binding.URL.Scheme == "kafka-tls" {
+		config.Net.TLS.Config = &tls.Config{InsecureSkipVerify: skipCertVerify}
+		config.Net.TLS.Enable = true
+	}
+
+	if binding.URL.User != nil {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.User = binding.URL.User.Username()
+		config.Net.SASL.Password, _ = binding.URL.User.Password()
+	}
+
+	mmb, err := strconv.Atoi(binding.URL.Query().Get("max.message.bytes"))
+	if err == nil && mmb >= 1<<17 && mmb < 1<<24 {
+		config.Producer.MaxMessageBytes = mmb
+	}
+
+	config.Producer.Flush.Bytes = config.Producer.MaxMessageBytes / 2
+	config.Producer.Flush.Frequency = 1 * time.Second
+
+	switch binding.URL.Query().Get("compression.type") {
+	case "none":
+		config.Producer.Compression = sarama.CompressionNone
+	default:
+		config.Producer.Compression = sarama.CompressionSnappy
+	case "lz4":
+		config.Producer.Compression = sarama.CompressionLZ4
+	case "gzip":
+		config.Producer.Compression = sarama.CompressionGZIP
+	}
+
+	config.ClientID = "Cloud Foundry"
+	if clientID := binding.URL.Query().Get("client.id"); clientID != "" {
+		config.ClientID = clientID
+	}
+
+	config.Producer.Return.Errors = true
+	config.Producer.Return.Successes = true
+
+	brokers = []string{binding.URL.Host}
+	if binding.URL.Query().Get("bootstrap.servers") != "" {
+		brokers = append(brokers, strings.Split(binding.URL.Query().Get("bootstrap.servers"), ",")...)
+	}
+
+	return
 }
